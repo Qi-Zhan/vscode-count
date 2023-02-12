@@ -15,11 +15,20 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscount.count",
-        "category": "vscount",
-        "title": "Count"
+        "command": "vscount.refresh",
+        "title": "refresh"
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "vscount.StatView",
+          "name": "Statistics",
+          "type": "webview"
+        
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

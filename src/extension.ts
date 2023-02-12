@@ -1,114 +1,98 @@
 import * as vscode from 'vscode';
-import {Files} from './file';
+import {SourceFiles} from './file';
 
 export function activate(context: vscode.ExtensionContext) {
-	let disposable = vscode.commands.registerCommand('vscount.count', () => {
-		let workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) {
-            vscode.window.showInformationMessage('Please open a workspace to count lines.');
-            return;
-        }
-		Files.fromWorkspace().then((files) => {
-			if (files.files.length > 0) {
-				let countResult = files.count();
-				let countAll = 0;
-				countResult.forEach((value) => {
-					console.log(value[0].name, value[1]);
-					countAll += value[1];
-				});
-				// show panel result in status bar
-				vscode.window.setStatusBarMessage(`Number of lines in all Python files in this workspace: ${countAll}`, 5000);
-						
-					
-				// show panel result in output
-				let output = vscode.window.createOutputChannel('vscount');
-				output.appendLine(`Number of lines in all Python files in this workspace: ${countAll}`);
-				countResult.forEach((value) => {
-					output.appendLine(`${value[0].name}: ${value[1]}`);
-				});
-				output.show();
 
-			} else {
-				console.log("No files found");
-			}
-		});
-	});
-	context.subscriptions.push(disposable);
+	const provider = new StatWebViewProvider(context.extensionUri);
+
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(StatWebViewProvider.viewType, provider)
+	);
+
+	context.subscriptions.push(vscode.commands.registerCommand('vscount.refresh', () => {
+		vscode.window.showInformationMessage('refresh from vscount!');
+		if (!vscode.workspace.workspaceFolders) {
+			vscode.window.showInformationMessage('Please open a workspace to count lines.');
+			return;
+		}
+		provider.refresh();
+	}));
+
+
 }
 
 export function deactivate() {}
 
+class StatWebViewProvider implements vscode.WebviewViewProvider {
 
-// import * as vscode from 'vscode';
-// import * as path from 'path';
-// import * as fs from 'fs';
+	public static readonly viewType = 'vscount.StatView';
 
-// export async function activate(context: vscode.ExtensionContext) {
-//     let disposable = vscode.commands.registerCommand('vscount.count', async () => {
-//         let count = 0;
-//         let workspaceFolders = vscode.workspace.workspaceFolders;
+	private _view?: vscode.WebviewView;
 
-//         if (!workspaceFolders) {
-//             vscode.window.showInformationMessage('Please open a workspace to count lines.');
-//             return;
-//         }
+	constructor(
+		private readonly _extensionUri: vscode.Uri
+	) {}
 
-//         for (const folder of workspaceFolders) {
-//             count += await countLinesInFolder(folder.uri.fsPath);
-//         }
+	resolveWebviewView(webviewView: vscode.WebviewView, context: vscode.WebviewViewResolveContext<unknown>, token: vscode.CancellationToken): void | Thenable<void> {
+		this._view = webviewView;
+		webviewView.webview.options = {
+			enableScripts: true,
+			localResourceRoots: [this._extensionUri]
+		};
+		this._getHtmlForWebview(webviewView.webview).then(html => {
+			webviewView.webview.html = html;
+			// console.log(html);
+			}
+		);
+	}
 
-//         vscode.window.showInformationMessage(`Number of lines in all Python files in this workspace: ${count}`);
-//     });
+	public async refresh(): Promise<void> {
+		await SourceFiles.fromWorkspace().then((files) => {
+			if (this._view) {
+				this._view.show?.(true);
+				let tablevalue = files.stat2html();
+				console.log(tablevalue);
+				this._view.webview.postMessage({ command: 'refresh', tablevalue: tablevalue });
+			}
+		});
+	}
 
-//     context.subscriptions.push(disposable);
-// }
+	private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
+		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
 
-// async function countLinesInFolder(folder: string): Promise<number> {
-//     return new Promise<number>((resolve, reject) => {
-//         fs.readdir(folder, async (err, files) => {
-//             if (err) {
-//                 console.error(err);
-//                 reject(err);
-//                 return;
-//             }
+		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'table.css'));
+		return await SourceFiles.fromWorkspace().then((files) => {
+			let tablevalue = files.stat2html();
+			return `<!DOCTYPE html>
+			<html lang="en">
+			<head>
+				<meta charset="UTF-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1.0">
+				<link href="${styleUri}" rel="stylesheet" />
+				<title>Statistics</title>
+	
+			</head>
+	
+			<body>
+			<table id="fileLinesTable">
+			  <thead>
+				<tr>
+				  <th>Source File</th>
+				  <th>Total Lines</th>
+				  <th>Source Code Lines</th>
+				  <th>Comment Lines</th>
+				  <th>Blank Lines</th>
+				</tr>
+			  </thead>
+			  <tbody id="fileLinesTableBody">
+				${tablevalue}
+			  </tbody>
+			</table>
+			<script src="${scriptUri}"></script>
+		  </body>
+		</html>`;
+		});
 
-//             let count = 0;
-//             for (const file of files) {
-//                 let fullPath = path.join(folder, file);
-//                 let stat = await statAsync(fullPath);
-//                 if (stat.isFile() && path.extname(file) === '.py') {
-//                     let data = await readFileAsync(fullPath, 'utf8');
-//                     count += data.split(/\r\n|\r|\n/).length;
-//                 } else if (stat.isDirectory()) {
-//                     count += await countLinesInFolder(fullPath);
-//                 }
-//             }
 
-//             resolve(count);
-//         });
-//     });
-// }
-
-// function statAsync(path: string): Promise<fs.Stats> {
-//     return new Promise<fs.Stats>((resolve, reject) => {
-//         fs.stat(path, (err, stat) => {
-//             if (err) {
-//                 reject(err);
-//             } else {
-//                 resolve(stat);
-//             }
-//         });
-//     });
-// }
-
-// function readFileAsync(path: string, encoding:any): Promise<string> {
-//     return new Promise<string>((resolve, reject) => {
-// 		fs.readFile(path, encoding, (err, data) => {
-// 			if (err) {
-// 				reject(err);
-// 			} else {
-// 				resolve(data.toString());
-// 			}
-// 		});
-// 	});
-// }
+	}
+}
