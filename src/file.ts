@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
-
+import * as setting from './settings';
 class Stat {
     total: number;
     blank: number;
@@ -37,11 +37,8 @@ class SourceFile {
         let comment = 0;
         let code = 0;
         lines.forEach((line) => {
-            // check if line is blank
-            if (line.match(/^\s*$/)) {
+            if (line.trim().length === 0) {
                 blank++;
-            } else if (line.match(/^\s*#/)) {
-                comment++;
             } else {
                 code++;
             }
@@ -57,7 +54,21 @@ class SourceFile {
             name = name ? name : "";
             let extension = uri.fsPath.split(".").pop();
             extension = extension ? extension : "";
-            return new SourceFile(name, uri.fsPath, content, extension); 
+            switch (extension) {
+                case "py":
+                    return new PythonFile(name, uri.fsPath, content);
+                case "java":
+                    return new JavaFile(name, uri.fsPath, content);
+                case "js":
+                    return new JsFile(name, uri.fsPath, content);
+                case "ts":
+                    return new TsFile(name, uri.fsPath, content);
+                case "c":
+                    return new CFile(name, uri.fsPath, content);
+
+                default:
+                    return new SourceFile(name, uri.fsPath, content, extension); 
+            }
         });
     }
 
@@ -77,10 +88,112 @@ class PythonFile extends SourceFile {
         let comment = 0;
         let code = 0;
         lines.forEach((line) => {
+            if (line.trim().length === 0) {
+                blank++;
+            } else if (line.trim().startsWith("#")) {
+                comment++;
+            } else {
+                code++;
+            }
+        }
+        );
+        return new Stat(total, blank, comment, code);
+    }
+}
+
+class JavaFile extends SourceFile {
+    constructor(name: string, path: string, content: string) {
+        super(name, path, content, "java");
+    }
+
+    stat(): Stat {
+        let lines = this.content.split(os.EOL);
+        let total = lines.length;
+        let blank = 0;
+        let comment = 0;
+        let code = 0;
+        lines.forEach((line) => {
+            if (line.match(/^\s*$/)) {
+                blank++;
+            } else if (line.match(/^\s*\/\//)) {
+                comment++;
+            } else {
+                code++;
+            }
+        }
+        );
+        return new Stat(total, blank, comment, code);
+    }
+}
+
+class JsFile extends SourceFile {
+    constructor(name: string, path: string, content: string) {
+        super(name, path, content, "js");
+    }
+
+    stat(): Stat {
+        let lines = this.content.split(os.EOL);
+        let total = lines.length;
+        let blank = 0;
+        let comment = 0;
+        let code = 0;
+        lines.forEach((line) => {
             // check if line is blank
             if (line.match(/^\s*$/)) {
                 blank++;
-            } else if (line.match(/^\s*#/)) {
+            } else if (line.match(/^\s*\/\//)) {
+                comment++;
+            } else {
+                code++;
+            }
+        }
+        );
+        return new Stat(total, blank, comment, code);
+    }
+}
+
+class TsFile extends SourceFile {
+    constructor(name: string, path: string, content: string) {
+        super(name, path, content, "ts");
+    }
+
+    stat(): Stat {
+        let lines = this.content.split(os.EOL);
+        let total = lines.length;
+        let blank = 0;
+        let comment = 0;
+        let code = 0;
+        lines.forEach((line) => {
+            // check if line is blank
+            if (line.match(/^\s*$/)) {
+                blank++;
+            } else if (line.match(/^\s*\/\//)) {
+                comment++;
+            } else {
+                code++;
+            }
+        }
+        );
+        return new Stat(total, blank, comment, code);
+    }
+}
+
+class CFile extends SourceFile {
+    constructor(name: string, path: string, content: string) {
+        super(name, path, content, "c");
+    }
+
+    stat(): Stat {
+        let lines = this.content.split(os.EOL);
+        let total = lines.length;
+        let blank = 0;
+        let comment = 0;
+        let code = 0;
+        lines.forEach((line) => {
+            // check if line is blank
+            if (line.match(/^\s*$/)) {
+                blank++;
+            } else if (line.match(/^\s*\/\//)) {
                 comment++;
             } else {
                 code++;
@@ -102,19 +215,30 @@ export class SourceFiles {
         
         let files: SourceFile[] = [];
         await Promise.all(uris.map(async (uri) => {
-            
+            // switch extension to create different SourceFile
+            let extension = uri.fsPath.split(".").pop();
             await SourceFile.fromUri(uri).then((file) => {
                 files.push(file);
             });
+
         }));
         return files;
     }
 
     public static async fromWorkspace(): Promise<SourceFiles> {
         return await vscode.workspace.findFiles("**/**").then(async (value) => {
-            // filter value to get only files ending with .py
             value = value.filter((uri) => {
-                return uri.fsPath.endsWith(".py");
+                // get acceptable extension from vscode setting
+                let extaccept = setting.getLanguageExtension();
+                let ext = uri.fsPath.split(".").pop();
+                // consider file with no extension as acceptable
+                if (ext === undefined) {
+                    return false;
+                }
+                if (extaccept.has(ext)) {
+                    return true;
+                }
+                return false;
             });
             let files = await SourceFiles.fromUriArray(value);
             return new SourceFiles(files);
@@ -168,9 +292,9 @@ export class SourceFiles {
         let html = "";
         stat.forEach((value) => {
             if (value[0].name === "Total:") {
-                html += `<tr><td><b>${this.chooseName(stat, value[0])}</b></td><td><b>${value[1].total}</b></td><td><b>${value[1].blank}</b></td><td><b>${value[1].comment}</b></td><td><b>${value[1].code}</b></td></tr>`;
+                html += `<tr><td><b>${this.chooseName(stat, value[0])}</b></td><td><b>${value[1].total}</b></td><td><b>${value[1].code}</b></td><td><b>${value[1].comment}</b></td><td><b>${value[1].blank}</b></td></tr>`;
             } else {
-                html += `<tr><td>${this.chooseName(stat, value[0])}</td><td>${value[1].total}</td><td>${value[1].blank}</td><td>${value[1].comment}</td><td>${value[1].code}</td></tr>`;
+                html += `<tr><td>${this.chooseName(stat, value[0])}</td><td>${value[1].total}</td><td>${value[1].code}</td><td>${value[1].comment}</td><td>${value[1].blank}</td></tr>`;
             }
         }
         );

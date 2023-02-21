@@ -51,7 +51,6 @@ class StatWebViewProvider implements vscode.WebviewViewProvider {
 			if (this._view) {
 				this._view.show?.(true);
 				let tablevalue = files.stat2html();
-				console.log(tablevalue);
 				this._view.webview.postMessage({ command: 'refresh', tablevalue: tablevalue });
 			}
 		});

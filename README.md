@@ -4,6 +4,7 @@
 ## Features
 
 This extension allows you to count the number of lines in a file.
+![vscount](show.png)
 
 ## Requirements
 
@@ -13,18 +14,15 @@ This extension allows you to count the number of lines in a file.
 This extension contributes the following settings:
 
 * `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* `myExtension.language`: Language to use for the count.
 
 ## Known Issues
 
 
 ## Release Notes
-
-Users appreciate release notes as you update your extension.
-
 ### 0.0.1
 
-Initial release of ...
+Initial release of vscount!
 
 
 **Enjoy!**

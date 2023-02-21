@@ -28,6 +28,21 @@
         
         }
       ]
+    },
+    "configuration": {
+      "title": "vscount",
+      "properties": {
+        "vscount.language": {
+          "type": "string",
+          "default": "js, java, py, cpp, c, cs, ts, html, css, json, go, php, h, hpp, swift, rs, r, rb, pl, pm, v, po",
+          "description": "Language extension to count"
+        },
+        "vscount.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable extension"
+        }
+      }
     }
   },
   "scripts": {

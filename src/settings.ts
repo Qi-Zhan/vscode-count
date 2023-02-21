@@ -1,10 +1,15 @@
 // get vscode extension options
 import * as vscode from 'vscode';
 
-export function getOptions(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('vscount');
+export function getLanguageExtension(): Set<string> {
+
+    const config = vscode.workspace.getConfiguration('vscount');
+    const customSetting = config.get<string>('language');
+    if (customSetting === undefined) {
+        return new Set();
+    }
+    let rs = customSetting.split(",");
+    rs = rs.map((s) => s.trim());
+    return new Set(rs);
 }
 
-export function setOptions(options: vscode.WorkspaceConfiguration): void {
-    vscode.workspace.getConfiguration('vscount').update('files', options, true);
-}

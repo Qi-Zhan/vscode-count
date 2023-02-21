@@ -10,11 +10,12 @@ table {
     padding: 8px;
   }
 
-  tr:nth-child(even) {
+  /* tr:nth-child(even) {
     background-color: #dddddd;
+
   }
 
   th {
     background-color: #D3D3D3;
     color: white;
-  } 
+  }  */
