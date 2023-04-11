@@ -4,7 +4,7 @@
 ## Features
 
 This extension allows you to count the number of lines in a file.
-![vscount](show.png)
+![vscount](https://github.com/Qi-Zhan/vscode-count/blob/main/show.png)
 
 ## Requirements
 

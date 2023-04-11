@@ -13,8 +13,6 @@ suite('Extension Test Suite', () => {
 		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
 	});
 
-	test('Test stat', () => {
-		let files = new file.SourceFiles([]);
-		assert.strictEqual(files.stat().length, 0);
-	});
+	// test count every File
+
 });

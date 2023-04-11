@@ -10,7 +10,7 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	context.subscriptions.push(vscode.commands.registerCommand('vscount.refresh', () => {
-		vscode.window.showInformationMessage('refresh from vscount!');
+		vscode.window.showInformationMessage('refresh count result!');
 		if (!vscode.workspace.workspaceFolders) {
 			vscode.window.showInformationMessage('Please open a workspace to count lines.');
 			return;
@@ -58,7 +58,6 @@ class StatWebViewProvider implements vscode.WebviewViewProvider {
 
 	private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
-
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'table.css'));
 		return await SourceFiles.fromWorkspace().then((files) => {
 			let tablevalue = files.stat2html();
@@ -91,7 +90,5 @@ class StatWebViewProvider implements vscode.WebviewViewProvider {
 		  </body>
 		</html>`;
 		});
-
-
 	}
 }

@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as setting from './settings';
+import ignore from 'ignore';
+import { Ignore } from 'ignore';
+import { Utils } from 'vscode-uri';
+import path = require('path');
+import * as fs from 'fs';
+
 class Stat {
     total: number;
     blank: number;
@@ -12,9 +18,8 @@ class Stat {
         this.comment = comment;
         this.code = code;
     }
-
 }
-   
+
 
 class SourceFile {
     path: string;
@@ -22,9 +27,9 @@ class SourceFile {
     name: string;
     extension: string;
     constructor(name: string, path: string, content: string, extension: string) {
-        this.name =  name;
-        this.path =  path;
-        this.content =  content;
+        this.name = name;
+        this.path = path;
+        this.content = content;
         this.extension = extension;
     }
 
@@ -46,7 +51,7 @@ class SourceFile {
         );
         return new Stat(total, blank, comment, code);
     }
-    
+
     public static async fromUri(uri: vscode.Uri): Promise<SourceFile> {
         return await vscode.workspace.openTextDocument(uri).then((doc) => {
             let content = doc.getText();
@@ -65,14 +70,13 @@ class SourceFile {
                     return new TsFile(name, uri.fsPath, content);
                 case "c":
                     return new CFile(name, uri.fsPath, content);
-
+                case "rs":
+                    return new RsFile(name, uri.fsPath, content);
                 default:
-                    return new SourceFile(name, uri.fsPath, content, extension); 
+                    return new SourceFile(name, uri.fsPath, content, extension);
             }
         });
     }
-
-
 }
 
 
@@ -178,6 +182,32 @@ class TsFile extends SourceFile {
     }
 }
 
+class RsFile extends SourceFile {
+    constructor(name: string, path: string, content: string) {
+        super(name, path, content, "rs");
+    }
+
+    stat(): Stat {
+        let lines = this.content.split(os.EOL);
+        let total = lines.length;
+        let blank = 0;
+        let comment = 0;
+        let code = 0;
+        lines.forEach((line) => {
+            // check if line is blank
+            if (line.match(/^\s*$/)) {
+                blank++;
+            } else if (line.match(/^\s*\/\//)) {
+                comment++;
+            } else {
+                code++;
+            }
+        }
+        );
+        return new Stat(total, blank, comment, code);
+    }
+}
+
 class CFile extends SourceFile {
     constructor(name: string, path: string, content: string) {
         super(name, path, content, "c");
@@ -204,7 +234,6 @@ class CFile extends SourceFile {
     }
 }
 
-
 export class SourceFiles {
     files: SourceFile[];
     constructor(files: SourceFile[]) {
@@ -212,36 +241,62 @@ export class SourceFiles {
     }
 
     static async fromUriArray(uris: vscode.Uri[]): Promise<SourceFile[]> {
-        
         let files: SourceFile[] = [];
         await Promise.all(uris.map(async (uri) => {
-            // switch extension to create different SourceFile
-            let extension = uri.fsPath.split(".").pop();
             await SourceFile.fromUri(uri).then((file) => {
                 files.push(file);
             });
-
         }));
         return files;
     }
 
+    static async getIgnore(): Promise<Ignore> {
+        let ig = ignore({allowRelativePaths: true});
+        try {
+            let folder = vscode.workspace.workspaceFolders;
+            if (folder === undefined) {
+                return ig;
+            } else {
+                if (folder.length === 0) {
+                    return ig;
+                }
+                // if (vscode.workspace.asRelativePath())
+                let ignorePath = Utils.joinPath(folder[0].uri, ".gitignore");
+                if (!fs.existsSync(ignorePath.fsPath)) {
+                    return ig;
+                }
+                return vscode.workspace.fs.readFile((Utils.joinPath(folder[0].uri, ".gitignore") )).then((data) => {
+                    let content = data.toString();
+                    const ignoreContent = content.split(os.EOL);
+                    // console.log("---%s", ignoreContent);
+                    return ig.add(ignoreContent);
+                });
+            }
+        } catch (error) {
+            return ig;
+        }
+    }
+
     public static async fromWorkspace(): Promise<SourceFiles> {
-        return await vscode.workspace.findFiles("**/**").then(async (value) => {
-            value = value.filter((uri) => {
-                // get acceptable extension from vscode setting
-                let extaccept = setting.getLanguageExtension();
-                let ext = uri.fsPath.split(".").pop();
-                // consider file with no extension as acceptable
-                if (ext === undefined) {
-                    return false;
-                }
-                if (extaccept.has(ext)) {
+        return await SourceFiles.getIgnore().then(async (ig) => {
+            return await vscode.workspace.findFiles("**/**").then(async (values) => {
+                values = values.filter((uri) => {
+                    // get acceptable extension from vscode setting
+                    let extaccept = setting.getLanguageExtension();
+                    let ext = uri.fsPath.split(".").pop();
+                    // consider file with no extension as unacceptable
+                    if (ext === undefined || !extaccept.has(ext)) {
+                        return false;
+                    }
+                    let path = vscode.workspace.asRelativePath(uri.fsPath);
+                    if (ig.ignores(path)) {
+                        return false;
+                    }
                     return true;
-                }
-                return false;
+                });
+                let files = await SourceFiles.fromUriArray(values);
+                return new SourceFiles(files);
             });
-            let files = await SourceFiles.fromUriArray(value);
-            return new SourceFiles(files);
         });
     }
 
@@ -270,7 +325,6 @@ export class SourceFiles {
 
     private chooseName(stats: [SourceFile, Stat][], file: SourceFile): string {
         // if i th element name is unique, return it
-
         if (stats.filter((value) => {
             return value[0].name === file.name;
         }
@@ -278,7 +332,7 @@ export class SourceFiles {
             return file.name;
         }
         // else return name + last part of path
-        console.log(file.path);
+        // console.log(file.path);
         let paths = file.path.split("/");
         if (paths.length === 1) {
             return file.name;
@@ -292,7 +346,8 @@ export class SourceFiles {
         let html = "";
         stat.forEach((value) => {
             if (value[0].name === "Total:") {
-                html += `<tr><td><b>${this.chooseName(stat, value[0])}</b></td><td><b>${value[1].total}</b></td><td><b>${value[1].code}</b></td><td><b>${value[1].comment}</b></td><td><b>${value[1].blank}</b></td></tr>`;
+                // html += `<tr><td><b>${this.chooseName(stat, value[0])}</b></td><td><b>${value[1].total}</b></td><td><b>${value[1].code}</b></td><td><b>${value[1].comment}</b></td><td><b>${value[1].blank}</b></td></tr>`;
+                html += `<tr><td><b>Total ${this.files.length} Files</b></td><td><b>${value[1].total}</b></td><td><b>${value[1].code}</b></td><td><b>${value[1].comment}</b></td><td><b>${value[1].blank}</b></td></tr>`;
             } else {
                 html += `<tr><td>${this.chooseName(stat, value[0])}</td><td>${value[1].total}</td><td>${value[1].code}</td><td>${value[1].comment}</td><td>${value[1].blank}</td></tr>`;
             }
